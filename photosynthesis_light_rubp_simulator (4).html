@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photosynthesis: Light & RuBP Simulator</title>
+<style>
+:root{--green:#217a4b;--mint:#e9f7ee;--ink:#173329;--muted:#5d7468;--line:#d6e6db}
+*{box-sizing:border-box}body{margin:0;background:#f4f8f5;color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+main{max-width:1050px;margin:28px auto;padding:0 18px}.hero{background:linear-gradient(125deg,#164f35,#2b8a55);color:white;padding:26px 28px;border-radius:18px;margin-bottom:18px}.hero h1{margin:0 0 6px;font-size:clamp(1.6rem,4vw,2.3rem)}.hero p{margin:0;color:#e2f5e8}
+.layout{display:grid;grid-template-columns:minmax(260px, .85fr) minmax(300px,1.15fr);gap:18px}.panel{background:white;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 5px 20px #17332908}.panel h2{margin:0 0 14px;font-size:1.2rem}.control{margin:22px 0}.control label{display:flex;justify-content:space-between;gap:12px;font-weight:650}.control output{color:var(--green);font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--green);margin:12px 0 4px}.scale{display:flex;justify-content:space-between;color:var(--muted);font-size:.8rem}.metric{background:var(--mint);padding:16px;border-radius:12px;margin-top:12px}.metric small{display:block;color:var(--muted);font-weight:650}.metric strong{font-size:2rem;color:var(--green)}.bar{height:12px;background:#dce9df;border-radius:99px;overflow:hidden;margin-top:10px}.bar span{display:block;height:100%;width:0;background:linear-gradient(90deg,#8ccf75,#217a4b);transition:width .2s}.status{font-weight:700;margin-top:12px}.explain{color:var(--muted);font-size:.93rem}.chart-wrap{position:relative;width:100%;height:265px}canvas{width:100%;height:100%;display:block}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:1px solid #b9d5c2;background:white;color:var(--green);padding:9px 13px;border-radius:9px;font-weight:700;cursor:pointer}button:hover{background:var(--mint)}.note{margin-top:18px}.equation{font-family:Georgia,serif;background:#f5faf6;border-radius:10px;padding:12px;text-align:center;font-size:1.05rem}.footer{font-size:.85rem;color:var(--muted);margin:16px 2px 30px}
+@media(max-width:720px){.layout{grid-template-columns:1fr}.hero{padding:22px}.panel{padding:17px}}
+</style>
+</head>
+<body>
+<main>
+<section class="hero"><h1>Photosynthesis: Light & RuBP</h1><p>Explore how light energy and ribulose-1,5-bisphosphate (RuBP) affect the Calvin cycle and photosynthetic rate.</p></section>
+<div class="layout">
+<section class="panel">
+<h2>Change the conditions</h2>
+<div class="control"><label for="light">Sunlight intensity <output id="lightOut">60%</output></label><input id="light" type="range" min="0" max="100" value="60"><div class="scale"><span>Dark</span><span>Bright light</span></div></div>
+<div class="control"><label for="rubp">RuBP availability <output id="rubpOut">50%</output></label><input id="rubp" type="range" min="0" max="100" value="50"><div class="scale"><span>Very low</span><span>Abundant</span></div></div>
+<div class="metric"><small>Relative photosynthetic rate</small><strong id="rate">—</strong><span> / 100</span><div class="bar"><span id="bar"></span></div><div class="status" id="limiter">Calculating…</div></div>
+<div class="actions"><button id="low">Low light</button><button id="high">Bright light</button><button id="reset">Reset</button></div>
+<p class="explain">The rate is a simplified teaching model, not a direct measurement from a real plant. Other factors (such as CO₂, temperature and enzyme activity) are held constant.</p>
+</section>
+<section class="panel">
+<h2>Rate response</h2>
+<div class="chart-wrap"><canvas id="chart" aria-label="Graph of photosynthetic rate versus sunlight intensity"></canvas></div>
+<p class="explain" id="chartCaption">The curve shows the predicted rate at the current RuBP setting as light intensity changes. The dot marks your current settings.</p>
+<div class="equation">Light reactions provide ATP and NADPH; RuBP accepts CO₂ in the Calvin cycle.</div>
+</section>
+</div>
+<section class="panel note">
+<h2>How to interpret the model</h2>
+<ul>
+<li><b>Increase sunlight:</b> the rate rises when light is limiting, then approaches a plateau as RuBP availability becomes the bottleneck.</li>
+<li><b>Increase RuBP:</b> more CO₂-acceptor substrate is available, so the modeled Calvin-cycle rate can rise—especially when light supplies enough energy.</li>
+<li><b>Try a fair comparison:</b> change one slider at a time and note the rate. At zero light, the model predicts essentially no sustained photosynthetic rate even if RuBP is abundant.</li>
+</ul>
+<p class="explain">Biology note: RuBP is regenerated during the Calvin cycle. This slider represents its effective availability, not a claim that plants can freely accumulate unlimited RuBP. Real photosynthesis depends on several interacting limiting factors.</p>
+</section>
+<div class="footer">Educational interactive • Runs locally in your browser • No data is sent anywhere</div>
+</main>
+<script>
+const light=document.getElementById('light'), rubp=document.getElementById('rubp');
+const lightOut=document.getElementById('lightOut'), rubpOut=document.getElementById('rubpOut');
+const rateEl=document.getElementById('rate'), bar=document.getElementById('bar'), limiter=document.getElementById('limiter');
+const canvas=document.getElementById('chart'), ctx=canvas.getContext('2d');
+function model(L,R){
+  // Saturating light response multiplied by a RuBP substrate-response term.
+  const lightFactor = L<=0 ? 0 : (1-Math.exp(-L/34));
+  const rubpFactor = R<=0 ? 0 : R/(R+22);
+  return 100 * lightFactor * rubpFactor / (1-Math.exp(-100/34)) / (100/(100+22));
+}
+function draw(){
+  const L=+light.value,R=+rubp.value,rate=model(L,R);
+  lightOut.value=L+'%';rubpOut.value=R+'%';rateEl.textContent=Math.round(rate);
+  bar.style.width=rate+'%';
+  const lightPotential=model(L,100), rubpPotential=model(100,R);
+  limiter.textContent = rate<1 ? 'Rate is near zero' : (lightPotential < rubpPotential ? 'Likely limiting factor: sunlight' : (rubpPotential < lightPotential ? 'Likely limiting factor: RuBP availability' : 'Both factors contribute'));
+  drawChart(L,R);
+}
+function drawChart(L,R){
+  const rect=canvas.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.round(rect.width*dpr));canvas.height=Math.max(1,Math.round(rect.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w=rect.width,h=rect.height,p={l:42,r:12,t:12,b:34},cw=w-p.l-p.r,ch=h-p.t-p.b;
+  ctx.clearRect(0,0,w,h);ctx.font='12px system-ui';ctx.lineWidth=1;
+  ctx.strokeStyle='#e2ece5';ctx.fillStyle='#5d7468';
+  for(let v=0;v<=100;v+=20){let y=p.t+ch-(v/100)*ch;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();ctx.fillText(v,p.l-28,y+4)}
+  for(let v=0;v<=100;v+=25){let x=p.l+(v/100)*cw;ctx.fillText(v+'%',x-10,h-10)}
+  ctx.strokeStyle='#217a4b';ctx.lineWidth=3;ctx.beginPath();
+  for(let x=0;x<=100;x++){let y=model(x,R),px=p.l+(x/100)*cw,py=p.t+ch-(y/100)*ch;if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py)}
+  ctx.stroke();
+  const py=p.t+ch-(model(L,R)/100)*ch,px=p.l+(L/100)*cw;
+  ctx.fillStyle='#e18b32';ctx.beginPath();ctx.arc(px,py,5.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#173329';ctx.fillText('Rate',5,14);ctx.fillText('Sunlight intensity',w/2-49,h-1);
+}
+light.addEventListener('input',draw);rubp.addEventListener('input',draw);
+document.getElementById('low').addEventListener('click',()=>{light.value=20;draw()});
+document.getElementById('high').addEventListener('click',()=>{light.value=90;draw()});
+document.getElementById('reset').addEventListener('click',()=>{light.value=60;rubp.value=50;draw()});
+window.addEventListener('resize',draw);draw();
+</script>
+</body>
+</html>
